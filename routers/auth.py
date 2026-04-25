@@ -1,50 +1,62 @@
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, delete
 
-from auth_utils import verify_password, hash_password, create_access_token, get_current_user
+
+from auth_utils import verify_password, hash_password, check_password_history
 from sqlalchemy.ext.asyncio import AsyncSession
+from dependencies.auth import get_current_user
 from database import get_db
-from models import Developer
-from schemas import DeveloperCreate, DeveloperResponse, Token
+from models import Developer, PasswordHistory
+from schemas.developer import DeveloperCreate, DeveloperResponse
+from schemas.auth import Token, ChangePasswordRequest
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 
+
+from services.auth_service import AuthService, get_auth_service
+
 router = APIRouter(
-    prefix="/Auth",
+    prefix="/auth",
     tags=["Auth"]
 )
 
 @router.post("/register", response_model=DeveloperResponse)
-async def register(create_developer: DeveloperCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Developer).where(Developer.email == create_developer.email))
-    existing_user = result.scalars().first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="This email is already registered.")
-    create_developer = Developer(
-        email=create_developer.email,
-        username=create_developer.username,
-        age=create_developer.age,
-        hashed_password=hash_password(create_developer.password),
-        is_active=True
-    )
-    db.add(create_developer)
-    await db.commit()
+async def register(data: DeveloperCreate, auth_service: AuthService = Depends(get_auth_service)):
+    return await auth_service.register_user(data)
 
-    result = await db.execute(select(Developer).where(Developer.email == create_developer.email).options(selectinload(Developer.games)))
-    return result.scalars().first()
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Developer).where(Developer.username == form_data.username))
-    developer_exists = result.scalars().first()
-    if not developer_exists:
-        raise HTTPException(status_code=401, detail="Invalid Credentials")
-    if not verify_password(form_data.password, developer_exists.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid Credentials")
-    token = create_access_token({"sub": str(developer_exists.id)})
-    return {"access_token": token, "token_type": "bearer"}
+async def login_user(data: OAuth2PasswordRequestForm = Depends(), auth_service: AuthService = Depends(get_auth_service)):
+    return await auth_service.login(data)
+
+
+
+@router.post("/change-password")
+async def change_password(change_current_password: ChangePasswordRequest, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user)):
+    if not verify_password(change_current_password.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Current password is incorrect.")
+    await check_password_history(user_id=current_user.id,
+                                 new_password=change_current_password.new_password,
+                                 db=db)
+    old_entry = PasswordHistory(
+        developer_id=current_user.id,
+        hashed_password=current_user.hashed_password
+    )
+    db.add(old_entry)
+    current_user.hashed_password = hash_password(change_current_password.new_password)
+    current_user.token_version += 1
+    rows = await db.execute(select(PasswordHistory).where(PasswordHistory.developer_id == current_user.id).order_by(PasswordHistory.created_at.desc()).offset(5))
+    passwords = rows.scalars().all()
+    ids = [password.id for password in passwords]
+    if ids:
+        await db.execute(delete(PasswordHistory).where(PasswordHistory.id.in_(ids)))
+
+    await db.commit()
+
+
+    return {"message": "Password changed successfully."}
+
+
 
 @router.get("/me", response_model=DeveloperResponse)
 async def me(current_user: Developer = Depends(get_current_user)):
     return current_user
-

@@ -2,9 +2,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette import status
 
-from auth_utils import get_current_user
+from dependencies.auth import get_current_user
 from database import get_db
-from schemas import DeveloperResponse, DeveloperCreate
+from schemas.developer import DeveloperResponse, DeveloperCreate
 from sqlalchemy import select
 from models import Developer
 from fastapi import HTTPException, APIRouter, Depends

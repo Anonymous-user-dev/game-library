@@ -2,17 +2,29 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from database import get_db
 import bcrypt
-from fastapi.security import OAuth2PasswordBearer
+
 from jose import jwt, JWTError
+import re
 
 from config import settings
-from models import Developer
+from models import PasswordHistory
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/Auth/login")
+def validate_password_strength(value: str):
+    if len(value) < 12:
+        raise ValueError("Password must be at least 12 characters!")
+    if not re.search(r"[A-Z]", value):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", value):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"[0-9]", value):
+        raise ValueError("Password must contain at least one number")
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", value):
+        raise ValueError("Password must contain at least one special character")
+    return value
+
 
 def hash_password(plain_password: str) -> str:
     return bcrypt.hashpw(plain_password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
@@ -32,13 +44,16 @@ def verify_token(token: str) -> dict | None:
     except JWTError as e:
         return None
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
-    verify = verify_token(token)
-    if verify is None:
-        raise HTTPException(status_code=401, detail="Invalid Credentials")
-    user_id = int(verify.get("sub"))
-    result = await db.execute(select(Developer).where(user_id == Developer.id).options(selectinload(Developer.games)))
-    user = result.scalars().first()
-    if user is None:
-        raise HTTPException(status_code=401, detail="Invalid Credentials")
-    return user
+async def check_password_history(user_id: int, new_password: str, db: AsyncSession = Depends(get_db)) -> bool:
+    result = await db.execute(
+        select(PasswordHistory)
+        .where(PasswordHistory.developer_id == user_id)
+        .order_by(PasswordHistory.created_at.desc())
+        .limit(5)
+    )
+    old_passwords = result.scalars().all()
+
+    for old in old_passwords:
+        if verify_password(new_password, old.hashed_password):
+            raise HTTPException(status_code=400, detail="Cannot reuse one of your last 5 passwords.")
+    return True

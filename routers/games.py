@@ -2,9 +2,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
-from auth_utils import get_current_user
+from dependencies.auth import get_current_user
 from database import get_db
-from schemas import GameResponse, GameCreate
+from schemas.game import GameResponse, GameCreate
 from sqlalchemy import select
 from models import Game, Developer
 from fastapi import HTTPException, APIRouter, Depends
@@ -16,11 +16,16 @@ router = APIRouter(
 
 @router.post("/post_game", response_model=GameResponse)
 async def post_game(create_game: GameCreate, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user)):
-    new_game = Game(**create_game.model_dump())
+    new_game = Game(
+        name=create_game.name,
+        genre=create_game.genre,
+        price=create_game.price,
+        developer_id=current_user.id
+    )
     db.add(new_game)
     await db.commit()
     await db.refresh(new_game)
-    return new_game
+    return GameResponse.model_validate(new_game)
 
 
 @router.get("/get_games", response_model=list[GameResponse])

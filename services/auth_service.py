@@ -1,7 +1,9 @@
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
-from fastapi import HTTPException, Depends
+from fastapi import HTTPException, Depends, status
 
 from database import get_db
 from models import Developer
@@ -15,8 +17,6 @@ from auth_utils import (
 from schemas.developer import DeveloperCreate, DeveloperResponse
 from schemas.auth import Token
 
-def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
-    return AuthService(db)
 
 class AuthService:
     def __init__(self, db: AsyncSession):
@@ -45,47 +45,40 @@ class AuthService:
 
         try:
             await self.db.commit()
-            await self.db.refresh(new_user)
         except SQLAlchemyError:
             await self.db.rollback()
             raise
+        result = await self.db.execute(select(Developer).where(Developer.id == new_user.id).options(selectinload(Developer.games)))
+        return result.scalars().first()
 
-        return DeveloperResponse(
-            id=new_user.id,
-            username=new_user.username,
-            age=new_user.age,
-            games=[]
-        )
 
-    async def login(self, data) -> Token:
-        result = await self.db.execute(
-            select(Developer).where(Developer.username == data.username)
-        )
+    async def login(self, data: OAuth2PasswordRequestForm) -> Token:
+        result = await self.db.execute(select(Developer).where(Developer.username == data.username))
         user = result.scalars().first()
 
         if not user:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(status_code=401, detail="Invalid Credentials")
 
         if not verify_password(data.password, user.hashed_password):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(status_code=401, detail="Invalid Credentials")
 
-        token = create_access_token({
-            "sub": str(user.id),
-            "token_version": user.token_version
-        })
-
+        token = create_access_token(
+            {
+                "sub": user.id,
+                "token_version": user.token_version
+            }
+        )
         return Token(
             access_token=token,
             token_type="bearer"
         )
 
-
     async def get_user_by_token(self, token: str) -> Developer:
-    
+
         payload = verify_token(token)
 
         if not payload:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            raise HTTPException(status_code=401, detail="Invalid Token")
 
         user_id = payload.get("sub")
         token_version = payload.get("token_version")
@@ -93,17 +86,22 @@ class AuthService:
         if not user_id or token_version is None:
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
-        
-        result = await self.db.execute(
-            select(Developer).where(Developer.id == int(user_id))
-        )
+        result = await self.db.execute(select(Developer).where(Developer.id == int(user_id)))
         user = result.scalars().first()
 
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
 
-
-        if user.token_version != token_version:
+        if token_version != user.token_version:
             raise HTTPException(status_code=401, detail="Token expired")
 
         return user
+            
+async def blacklist_token(redis, token: str, expires_in: int):
+    try:
+        await redis.set(f"blacklist:{token}", "1", ex=expires_in)
+    except Exception as e: 
+        print("Blacklist failed: ", e)
+
+def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
+    return AuthService(db)

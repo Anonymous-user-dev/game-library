@@ -1,6 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette import status
+from dependencies.redis import get_redis
+from services.user_service import DeveloperService
 
 from dependencies.auth import get_current_user
 from database import get_db
@@ -21,11 +23,13 @@ async def get_developers_name(db: AsyncSession = Depends(get_db)):
     return developers
 
 @router.get("/get_developer/{developer_id}", response_model=DeveloperResponse)
-async def get_developer_by_id(developer_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Developer).where(Developer.id == developer_id).options(selectinload(Developer.games)))
-    developer = result.scalars().first()
+async def get_developer_by_id(developer_id: int, db: AsyncSession = Depends(get_db), redis=Depends(get_redis)):
+    service = DeveloperService(db, redis)
+
+    developer = await service.get_developer_by_id(developer_id)
     if not developer:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="not found")
+    return developer
 
     return developer
 @router.delete("/delete_developer/{developer_id}", status_code=status.HTTP_204_NO_CONTENT)

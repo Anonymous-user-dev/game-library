@@ -3,16 +3,18 @@ from sqlalchemy import select, delete
 
 from auth_utils import verify_password, hash_password, check_password_history
 from sqlalchemy.ext.asyncio import AsyncSession
-from dependencies.auth import get_current_user
+from dependencies.auth import get_current_user, oauth2_scheme
 from database import get_db
+from dependencies.redis import get_redis
 from models import Developer, PasswordHistory
 from schemas.developer import DeveloperCreate, DeveloperResponse
 from schemas.auth import Token, ChangePasswordRequest
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 
+from dependencies.auth import verify_blacklisted_token
+from services.auth_service import AuthService, get_auth_service, blacklist_token
 
-from services.auth_service import AuthService, get_auth_service
 
 router = APIRouter(
     prefix="/auth",
@@ -32,8 +34,10 @@ async def login_user(data: OAuth2PasswordRequestForm = Depends(), auth_service: 
 
 @router.post("/change-password")
 async def change_password(change_current_password: ChangePasswordRequest, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user)):
+
     if not verify_password(change_current_password.current_password, current_user.hashed_password):
         raise HTTPException(status_code=401, detail="Current password is incorrect.")
+
     await check_password_history(user_id=current_user.id,
                                  new_password=change_current_password.new_password,
                                  db=db)
@@ -60,3 +64,12 @@ async def change_password(change_current_password: ChangePasswordRequest, db: As
 @router.get("/me", response_model=DeveloperResponse)
 async def me(current_user: Developer = Depends(get_current_user)):
     return current_user
+
+@router.post("/logout")
+async def logout(token: str = Depends(oauth2_scheme), redis = Depends(get_redis)):
+    await blacklist_token(redis, token, expires_in=3600)
+    return {"message": "Logged out"}
+
+@router.get("/profile")
+async def profile(token=Depends(verify_blacklisted_token)):
+    return {"ok": True}

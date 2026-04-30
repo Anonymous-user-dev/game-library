@@ -48,10 +48,14 @@ async def update_game(game_id: int, create_game: GameCreate, db: AsyncSession = 
     if not game:
         raise HTTPException(status_code=404, detail="Not found")
 
+
+    if game.developer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You are not the owner of this game")
+
     game.name = create_game.name
     game.genre = create_game.genre
     game.price = create_game.price
-    game.developer_id = create_game.developer_id
+    
 
     await db.commit()
     await db.refresh(game)
@@ -63,6 +67,9 @@ async def delete_by_id(game_id: int, db: AsyncSession = Depends(get_db), current
     game = result.scalars().first()
     if not game:
         raise HTTPException(status_code=404, detail="Not found")
+    
+    if game.developer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You are not the owner of this game")
 
     await db.delete(game)
     await db.commit()

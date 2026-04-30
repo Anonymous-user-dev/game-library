@@ -12,11 +12,15 @@ class Settings(BaseSettings):
     ALGORITHM: str
     APP_ENV: str = "development"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REDIS_PORT: int = 6379
+    REDIS_HOST: str = "localhost"
+
 
     model_config = SettingsConfigDict(
-        env_file=str(Path(__file__).resolve().parent / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
+        env_file=".env",
+        extra="ignore"
     )
 
 settings = Settings()
+
+print("DB IN USE: ", settings.DATABASE_URL)

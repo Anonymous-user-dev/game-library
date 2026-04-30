@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
 
 from database import Base
-from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, DateTime, func
 from sqlalchemy.orm import relationship
+
 
 class Developer(Base):
     __tablename__ = "developers"
@@ -12,7 +13,7 @@ class Developer(Base):
     hashed_password = Column(String, nullable=False)
     age = Column(Integer, nullable=False)
     is_active = Column(Boolean, default=True)
-    token_version = Column(Integer, default=0)
+    token_version = Column(Integer, default=0, nullable=False, server_default="0")
     password_history = relationship("PasswordHistory",back_populates="developer")
 
     games = relationship("Game", back_populates="developer")
@@ -20,9 +21,9 @@ class Developer(Base):
 class PasswordHistory(Base):
     __tablename__ = "password_history"
     id = Column(Integer, primary_key=True)
-    developer_id = Column(Integer, ForeignKey("developers.id"), nullable=False)
+    developer_id = Column(Integer, ForeignKey("developers.id"), nullable=False, index=True)
     hashed_password = Column(String, nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     developer = relationship("Developer", back_populates="password_history")
 
 

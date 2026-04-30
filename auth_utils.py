@@ -44,7 +44,7 @@ def verify_token(token: str) -> dict | None:
     except JWTError as e:
         return None
 
-async def check_password_history(user_id: int, new_password: str, db: AsyncSession = Depends(get_db)) -> bool:
+async def check_password_history(user_id: int, new_password: str, db: AsyncSession) -> bool:
     result = await db.execute(
         select(PasswordHistory)
         .where(PasswordHistory.developer_id == user_id)

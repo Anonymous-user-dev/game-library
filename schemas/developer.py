@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, field_validator, Field
-import re
+from auth_utils import validate_password_strength
 
 from schemas.game import GameResponse
 
@@ -10,19 +10,8 @@ class DeveloperCreate(BaseModel):
     age: int
 
     @field_validator("password")
-    @classmethod
-    def validate_password(cls, value):
-        if len(value) < 12:
-            raise ValueError("Password must be at least 12 characters!")
-        if not re.search(r"[A-Z]", value):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not re.search(r"[a-z]", value):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not re.search(r"[0-9]", value):
-            raise ValueError("Password must contain at least one number")
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", value):
-            raise ValueError("Password must contain at least one special character")
-        return value
+    def validate(cls, v):
+        return validate_password_strength(v)
 
 class DeveloperResponse(BaseModel):
     id: int

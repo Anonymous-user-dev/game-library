@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import logging
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     DATABASE_URL: str
@@ -23,4 +25,4 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-print("DB IN USE: ", settings.DATABASE_URL)
+logger.info(f"DB IN USE: {settings.DATABASE_URL}")

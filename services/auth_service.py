@@ -3,9 +3,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
-from fastapi import HTTPException, Depends, status
-
+from fastapi import HTTPException, Depends
+import logging
 from database import get_db
+
 from models import Developer
 from auth_utils import (
     verify_password,
@@ -13,14 +14,17 @@ from auth_utils import (
     create_access_token,
     verify_token,
 )
-
+from redis.asyncio import Redis
 from schemas.developer import DeveloperCreate, DeveloperResponse
 from schemas.auth import Token
+from dependencies.auth import get_redis
 
+logger = logging.getLogger(__name__)
 
 class AuthService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis: Redis):
         self.db = db
+        self.redis = redis
 
 
     async def register_user(self, data: DeveloperCreate) -> DeveloperResponse:
@@ -64,7 +68,7 @@ class AuthService:
 
         token = create_access_token(
             {
-                "sub": user.id,
+                "sub": str(user.id),
                 "token_version": user.token_version
             }
         )
@@ -75,10 +79,14 @@ class AuthService:
 
     async def get_user_by_token(self, token: str) -> Developer:
 
-        payload = verify_token(token)
+        blacklisted = await self.redis.get(f"blacklist:{token}")
+        if blacklisted:
+            raise HTTPException(status_code=401, detail="Token revoked")
 
+        payload = verify_token(token)
         if not payload:
             raise HTTPException(status_code=401, detail="Invalid Token")
+
 
         user_id = payload.get("sub")
         token_version = payload.get("token_version")
@@ -94,14 +102,13 @@ class AuthService:
 
         if token_version != user.token_version:
             raise HTTPException(status_code=401, detail="Token expired")
-
         return user
             
 async def blacklist_token(redis, token: str, expires_in: int):
     try:
         await redis.set(f"blacklist:{token}", "1", ex=expires_in)
     except Exception as e: 
-        print("Blacklist failed: ", e)
+        logger.error(f"Blacklist failed: {e}")
 
-def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
-    return AuthService(db)
+def get_auth_service(db: AsyncSession = Depends(get_db), redis: Redis = Depends(get_redis)) -> AuthService:
+    return AuthService(db, redis)

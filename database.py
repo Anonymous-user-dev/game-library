@@ -11,7 +11,6 @@ SessionLocal = async_sessionmaker(
     autocommit=False,
     expire_on_commit=False
 )
-print("FINAL DATABASE URL:", settings.DATABASE_URL)
 
 class Base(DeclarativeBase):
     pass

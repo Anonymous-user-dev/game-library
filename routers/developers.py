@@ -31,7 +31,6 @@ async def get_developer_by_id(developer_id: int, db: AsyncSession = Depends(get_
         raise HTTPException(status_code=404, detail="not found")
     return developer
 
-    return developer
 @router.delete("/delete_developer/{developer_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_developer(developer_id: int, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user)):
     result = await db.execute(select(Developer).where(Developer.id == developer_id))
@@ -40,20 +39,14 @@ async def delete_developer(developer_id: int, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=404, detail="Developer with this id does not exist.")
 
     await db.delete(dev)
-    await db.commit()
+    await db.commit()   
 
 @router.put("/update_developer/{developer_id}", response_model=DeveloperResponse)
-async def update_developer(developer_id: int, developer_create: DeveloperCreate, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user)):
-    result = await db.execute(select(Developer).where(Developer.id == developer_id).options(selectinload(Developer.games)))
-    dev = result.scalars().first()
-    if not dev:
-        raise HTTPException(status_code=404, detail="Not found")
+async def update_developer(developer_id: int, developer_create: DeveloperCreate, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user), redis=Depends(get_redis)):
+    service = DeveloperService(db, redis)
 
-    dev.username = developer_create.username
-    dev.age = developer_create.age
-    dev.email = developer_create.email
+    dev = await service.update_developer(developer_id, developer_create)
 
-    await db.commit()
     return dev
 
 

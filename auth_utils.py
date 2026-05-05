@@ -42,6 +42,7 @@ def verify_token(token: str) -> dict | None:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload
     except JWTError as e:
+        print("JWT Error: ", e)
         return None
 
 async def check_password_history(user_id: int, new_password: str, db: AsyncSession) -> bool:

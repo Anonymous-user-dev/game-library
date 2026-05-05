@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dependencies.auth import get_current_user, oauth2_scheme
 from database import get_db
 from dependencies.redis import get_redis
+from config import settings
 from models import Developer, PasswordHistory
 from schemas.developer import DeveloperCreate, DeveloperResponse
 from schemas.auth import Token, ChangePasswordRequest
@@ -67,9 +68,9 @@ async def me(current_user: Developer = Depends(get_current_user)):
 
 @router.post("/logout")
 async def logout(token: str = Depends(oauth2_scheme), redis = Depends(get_redis)):
-    await blacklist_token(redis, token, expires_in=3600)
+    await blacklist_token(redis, token, expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
     return {"message": "Logged out"}
 
 @router.get("/profile")
-async def profile(token=Depends(verify_blacklisted_token)):
-    return {"ok": True}
+async def profile(token=Depends(verify_blacklisted_token), current_user: Developer = Depends(get_current_user)):
+    return current_user

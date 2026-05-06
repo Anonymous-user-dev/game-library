@@ -9,15 +9,16 @@ from sqlalchemy import select
 from models import Game, Developer
 from services.user_service import GameService
 from dependencies.auth import get_redis
-from fastapi import HTTPException, APIRouter, Depends
-
+from fastapi import HTTPException, APIRouter, Depends, Request
+from dependencies.limiter import limiter
 router = APIRouter(
     prefix="/games",
     tags=["Games"]
 )
 
 @router.post("/post_game", response_model=GameResponse)
-async def post_game(create_game: GameCreate, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user)):
+@limiter.limit("7/minute")
+async def post_game(request: Request, create_game: GameCreate, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user)):
     new_game = Game(
         name=create_game.name,
         genre=create_game.genre,
@@ -31,12 +32,14 @@ async def post_game(create_game: GameCreate, db: AsyncSession = Depends(get_db),
 
 
 @router.get("/get_games", response_model=list[GameResponse])
-async def get_all_games(db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def get_all_games(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Game))
     return result.scalars().all()
 
 @router.get("/{game_id}", response_model=GameResponse)
-async def get_game_by_id(game_id: int, db: AsyncSession = Depends(get_db), redis=Depends(get_redis)):
+@limiter.limit("10/minute")
+async def get_game_by_id(game_id: int, request: Request, db: AsyncSession = Depends(get_db), redis=Depends(get_redis)):
     service = GameService(db, redis)
     game = await service.get_game_by_id(game_id)
     if not game:
@@ -44,7 +47,8 @@ async def get_game_by_id(game_id: int, db: AsyncSession = Depends(get_db), redis
     return game
 
 @router.put("/{game_id}", response_model=GameResponse)
-async def update_game(game_id: int, create_game: GameCreate, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user), redis=Depends(get_redis)):
+@limiter.limit("5/minute")
+async def update_game(request: Request, game_id: int, create_game: GameCreate, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user), redis=Depends(get_redis)):
     service = GameService(db, redis)
 
     game = await service.update_game(game_id, create_game, current_user)
@@ -52,7 +56,8 @@ async def update_game(game_id: int, create_game: GameCreate, db: AsyncSession = 
     return game
 
 @router.delete("/{game_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_by_id(game_id: int, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user)):
+@limiter.limit("5/minute")
+async def delete_by_id(request: Request, game_id: int, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user)):
     result = await db.execute(select(Game).where(Game.id == game_id))
     game = result.scalars().first()
     if not game:

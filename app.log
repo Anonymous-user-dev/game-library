@@ -1,1 +1,21 @@
 INFO:main:Starting application in development environment
+INFO:main:Starting application in development environment
+DEBUG:services.user_service:CACHE MISS - querying DB for game: 3
+DEBUG:services.user_service:CACHE HIT for game: 3
+DEBUG:services.user_service:CACHE HIT for game: 3
+DEBUG:services.user_service:CACHE HIT for game: 3
+DEBUG:services.user_service:CACHE HIT for game: 3
+DEBUG:services.user_service:CACHE HIT for game: 3
+DEBUG:services.user_service:CACHE HIT for game: 3
+DEBUG:services.user_service:CACHE HIT for game: 3
+DEBUG:services.user_service:CACHE HIT for game: 3
+DEBUG:services.user_service:CACHE HIT for game: 3
+WARNING:slowapi:ratelimit 10 per 1 minute (127.0.0.1) exceeded at endpoint: /games/3
+WARNING:slowapi:ratelimit 10 per 1 minute (127.0.0.1) exceeded at endpoint: /games/3
+WARNING:slowapi:ratelimit 10 per 1 minute (127.0.0.1) exceeded at endpoint: /games/3
+WARNING:slowapi:ratelimit 10 per 1 minute (127.0.0.1) exceeded at endpoint: /games/3
+INFO:main:Starting application in development environment
+INFO:main:Starting application in development environment
+INFO:main:Starting application in development environment
+INFO:main:Starting application in development environment
+INFO:main:Starting application in development environment

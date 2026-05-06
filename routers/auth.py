@@ -10,11 +10,12 @@ from config import settings
 from models import Developer, PasswordHistory
 from schemas.developer import DeveloperCreate, DeveloperResponse
 from schemas.auth import Token, ChangePasswordRequest
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
-
+from dependencies.limiter import limiter
 from dependencies.auth import verify_blacklisted_token
 from services.auth_service import AuthService, get_auth_service, blacklist_token
+
 
 
 router = APIRouter(
@@ -23,18 +24,21 @@ router = APIRouter(
 )
 
 @router.post("/register", response_model=DeveloperResponse)
-async def register(data: DeveloperCreate, auth_service: AuthService = Depends(get_auth_service)):
+@limiter.limit("3/minute")
+async def register(data: DeveloperCreate, request: Request, auth_service: AuthService = Depends(get_auth_service)):
     return await auth_service.register_user(data)
 
 
 @router.post("/login", response_model=Token)
-async def login_user(data: OAuth2PasswordRequestForm = Depends(), auth_service: AuthService = Depends(get_auth_service)):
+@limiter.limit("3/minute")
+async def login_user(request: Request, data: OAuth2PasswordRequestForm = Depends(), auth_service: AuthService = Depends(get_auth_service)):
     return await auth_service.login(data)
 
 
 
 @router.post("/change-password")
-async def change_password(change_current_password: ChangePasswordRequest, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user)):
+@limiter.limit("3/minute")
+async def change_password(request: Request, change_current_password: ChangePasswordRequest, db: AsyncSession = Depends(get_db), current_user: Developer = Depends(get_current_user)):
 
     if not verify_password(change_current_password.current_password, current_user.hashed_password):
         raise HTTPException(status_code=401, detail="Current password is incorrect.")
@@ -63,14 +67,17 @@ async def change_password(change_current_password: ChangePasswordRequest, db: As
 
 
 @router.get("/me", response_model=DeveloperResponse)
-async def me(current_user: Developer = Depends(get_current_user)):
+@limiter.limit("3/minute")
+async def me(request: Request, current_user: Developer = Depends(get_current_user)):
     return current_user
 
 @router.post("/logout")
-async def logout(token: str = Depends(oauth2_scheme), redis = Depends(get_redis)):
+@limiter.limit("3/minute")
+async def logout(request: Request, token: str = Depends(oauth2_scheme), redis = Depends(get_redis)):
     await blacklist_token(redis, token, expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
     return {"message": "Logged out"}
 
 @router.get("/profile")
-async def profile(token=Depends(verify_blacklisted_token), current_user: Developer = Depends(get_current_user)):
+@limiter.limit("1/minute")
+async def profile(request: Request, token=Depends(verify_blacklisted_token), current_user: Developer = Depends(get_current_user)):
     return current_user

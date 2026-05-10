@@ -7,6 +7,7 @@ import logging
 from schemas.developer import DeveloperResponse, DeveloperCreate
 from schemas.game import GameResponse, GameCreate
 from models import Game
+from redis.asyncio import RedisError
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +21,11 @@ class DeveloperService:
 
         try:
             cached = await self.redis.get(cache_key)
-        except Exception:
+        except RedisError as e:
+            logger.error(f"Redis connection error: {e}")
             cached = None
         if cached:
+            logger.debug(f"CACHE HIT for developer: {user_id}")
             return DeveloperResponse(**json.loads(cached))
 
         
@@ -41,7 +44,7 @@ class DeveloperService:
         }
         try:
             await self.redis.set(cache_key, json.dumps(data), ex=60)
-        except Exception as e:
+        except RedisError as e:
             logger.error(f"Redis cache error: {e}")
 
         return DeveloperResponse(**data)
@@ -77,7 +80,8 @@ class GameService:
 
         try:
             cached = await self.redis.get(cache_key)
-        except Exception: 
+        except RedisError as e: 
+            logger.error(f"Redis connection error: {e}")
             cached = None
         if cached:
             logger.debug(f"CACHE HIT for game: {game_id}")
@@ -100,8 +104,8 @@ class GameService:
 
         try:
             await self.redis.set(cache_key, json.dumps(data), ex=60)
-        except Exception as e:
-            logger.error(f"Redis error: {e}")
+        except RedisError as e:
+            logger.error(f"Redis cache error: {e}")
 
         return GameResponse(**data)
     async def update_game(self, game_id: int, create_game: GameCreate, current_user):

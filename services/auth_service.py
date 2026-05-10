@@ -14,7 +14,7 @@ from auth_utils import (
     create_access_token,
     verify_token,
 )
-from redis.asyncio import Redis
+from redis.asyncio import Redis, RedisError
 from schemas.developer import DeveloperCreate, DeveloperResponse
 from schemas.auth import Token
 from dependencies.auth import get_redis
@@ -94,7 +94,7 @@ class AuthService:
         if not user_id or token_version is None:
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
-        result = await self.db.execute(select(Developer).where(Developer.id == int(user_id)))
+        result = await self.db.execute(select(Developer).where(Developer.id == int(user_id)).options(selectinload(Developer.games)))
         user = result.scalars().first()
 
         if not user:
@@ -107,7 +107,7 @@ class AuthService:
 async def blacklist_token(redis, token: str, expires_in: int):
     try:
         await redis.set(f"blacklist:{token}", "1", ex=expires_in)
-    except Exception as e: 
+    except RedisError as e: 
         logger.error(f"Blacklist failed: {e}")
 
 def get_auth_service(db: AsyncSession = Depends(get_db), redis: Redis = Depends(get_redis)) -> AuthService:

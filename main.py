@@ -7,6 +7,9 @@ import logging
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from dependencies.limiter import limiter
+from fastapi.middleware.cors import CORSMiddleware
+
+
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename="app.log", encoding="utf-8", level=logging.DEBUG if settings.APP_ENV == "development" else logging.INFO)
@@ -21,6 +24,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 

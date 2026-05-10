@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REDIS_PORT: int = 6379
     REDIS_HOST: str = "localhost"
-
+    ALLOWED_ORIGINS: list[str]
 
     model_config = SettingsConfigDict(
         env_file=".env",
